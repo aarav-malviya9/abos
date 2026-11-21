@@ -1,0 +1,31 @@
+{
+  "name": "abos",
+  "version": "1.0.0",
+  "description": "Autonomous Business Operating System - AI-powered business automation",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm:dev:api\" \"npm:dev:dashboard\" \"npm:dev:n8n\"",
+    "dev:api": "npm run dev --workspace=packages/api",
+    "dev:dashboard": "npm run dev --workspace=packages/dashboard",
+    "dev:n8n": "docker-compose -f docker-compose.yml up n8n",
+    "build": "npm run build --workspaces",
+    "build:dashboard": "npm run build --workspace=packages/dashboard",
+    "build:api": "npm run build --workspace=packages/api",
+    "db:init": "npm run db:init --workspace=packages/core",
+    "db:backup": "npm run db:backup --workspace=packages/core",
+    "start": "npm run start --workspace=packages/api & npm run start --workspace=packages/dashboard",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "type-check": "npm run type-check --workspaces"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

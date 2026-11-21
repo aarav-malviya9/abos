@@ -1,0 +1,14 @@
+{
+  "name": "@abos/n8n-workflows",
+  "version": "1.0.0",
+  "description": "n8n workflow definitions for ABOS",
+  "main": "index.js",
+  "scripts": {
+    "validate": "node validate-workflows.js",
+    "export": "node export-workflows.js",
+    "build": "echo 'No build needed for workflows'",
+    "type-check": "echo 'No TypeScript to check for workflows'"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

@@ -1,0 +1,164 @@
+{
+  "name": "Competitor Monitoring",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily at 2 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const opportunities = [\n  // In real implementation, fetch from API\n  { id: 'opp-1', name: 'AI SEO Tool', competitors: ['surferseo.com', 'clearscope.io'] },\n  { id: 'opp-2', name: 'Newsletter Platform', competitors: ['substack.com', 'beehiiv.com'] }\n];\n\nreturn opportunities.flatMap(opp => \n  opp.competitors.map(comp => ({ json: { opportunityId: opp.id, opportunityName: opp.name, competitor: comp } }))\n);"
+      },
+      "id": "get-competitors",
+      "name": "Get Competitors to Monitor",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "market-research",
+          "action": "competitor-analysis",
+          "payload": {
+            "opportunityId": "={{ $json.opportunityId }}",
+            "competitor": "={{ $json.competitor }}"
+          }
+        }
+      },
+      "id": "analyze-competitor",
+      "name": "Analyze Competitor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nconst changes = items.filter(item => item.json.success && item.json.output?.analysis?.changes?.length > 0);\n\nif (changes.length > 0) {\n  return [{ json: {\n    type: 'competitor_changes',\n    count: changes.length,\n    details: changes.map(c => `${c.json.opportunityName} - ${c.json.competitor}: ${c.json.output.analysis.changes.join(', ')}`)\n  }}];\n}\n\nreturn [{ json: { type: 'no_changes', message: 'No significant competitor changes detected' } }];"
+      },
+      "id": "detect-changes",
+      "name": "Detect Changes",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.type === 'competitor_changes' }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-changes",
+      "name": "Changes Detected?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/alerts",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "type": "competitor_change",
+          "message": "={{ $json.details.join('; ') }}",
+          "severity": "medium"
+        }
+      },
+      "id": "alert-changes",
+      "name": "Alert Changes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1500, 300]
+    }
+  ],
+  "connections": {
+    "Daily at 2 AM": {
+      "main": [
+        [
+          {
+            "node": "Get Competitors to Monitor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Competitors to Monitor": {
+      "main": [
+        [
+          {
+            "node": "Analyze Competitor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Competitor": {
+      "main": [
+        [
+          {
+            "node": "Detect Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Changes": {
+      "main": [
+        [
+          {
+            "node": "Changes Detected?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Changes Detected?": {
+      "main": [
+        [
+          {
+            "node": "Alert Changes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "competitor-monitoring"
+}

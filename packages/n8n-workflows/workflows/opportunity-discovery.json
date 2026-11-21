@@ -1,0 +1,113 @@
+{
+  "name": "Opportunity Discovery",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 3 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Weekly Monday 3 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { agentType: 'market-research', action: 'discover-opportunities', payload: { deepResearch: true } } }];"
+      },
+      "id": "create-task",
+      "name": "Create Deep Research Task",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "={{ $json.agentType }}",
+          "action": "={{ $json.action }}",
+          "payload": "={{ $json.payload }}"
+        }
+      },
+      "id": "execute-research",
+      "name": "Execute Deep Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "ceo",
+          "action": "evaluate-opportunity",
+          "payload": {
+            "opportunityId": "={{ $json.output.opportunities[0]?.id }}"
+          }
+        }
+      },
+      "id": "ceo-evaluate",
+      "name": "CEO Evaluate Top Opportunity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Weekly Monday 3 AM": {
+      "main": [
+        [
+          {
+            "node": "Create Deep Research Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Deep Research Task": {
+      "main": [
+        [
+          {
+            "node": "Execute Deep Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Deep Research": {
+      "main": [
+        [
+          {
+            "node": "CEO Evaluate Top Opportunity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "opportunity-discovery"
+}

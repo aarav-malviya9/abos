@@ -1,0 +1,161 @@
+{
+  "name": "Weekly Business Review",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Monday 9 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { agentType: 'ceo', action: 'weekly-review', payload: {} } }];"
+      },
+      "id": "create-task",
+      "name": "Create Weekly Review Task",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "={{ $json.agentType }}",
+          "action": "={{ $json.action }}",
+          "payload": "={{ $json.payload }}"
+        }
+      },
+      "id": "execute-review",
+      "name": "Execute Weekly Review",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const result = $input.item.json;\n\n// Check for critical alerts\nconst hasCriticalAlerts = result.output?.recommendations?.some((r: string) =>\n  r.toLowerCase().includes('critical') || r.toLowerCase().includes('urgent')\n) || false;\n\nreturn [{ json: { ...result, hasCriticalAlerts } }];"
+      },
+      "id": "check-alerts",
+      "name": "Check Critical Alerts",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.hasCriticalAlerts === true }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "if-critical",
+      "name": "Critical Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/alerts",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "type": "weekly_review_critical",
+          "message": "Weekly review generated critical recommendations requiring attention",
+          "severity": "high"
+        }
+      },
+      "id": "alert-critical",
+      "name": "Alert Critical",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1500, 300]
+    }
+  ],
+  "connections": {
+    "Monday 9 AM": {
+      "main": [
+        [
+          {
+            "node": "Create Weekly Review Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Weekly Review Task": {
+      "main": [
+        [
+          {
+            "node": "Execute Weekly Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Weekly Review": {
+      "main": [
+        [
+          {
+            "node": "Check Critical Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Critical Alerts": {
+      "main": [
+        [
+          {
+            "node": "Critical Alerts?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Critical Alerts?": {
+      "main": [
+        [
+          {
+            "node": "Alert Critical",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  ],
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "weekly-review"
+}

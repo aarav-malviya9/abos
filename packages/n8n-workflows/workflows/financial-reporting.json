@@ -1,0 +1,216 @@
+{
+  "name": "Financial Reporting",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "daily-trigger",
+      "name": "Daily at 6 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 200]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 6 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "weekly-trigger",
+      "name": "Weekly Monday 6 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 6 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "monthly-trigger",
+      "name": "Monthly 1st at 6 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 600]
+    },
+    {
+      "parameters": {
+        "functionCode": "const period = $node.name.includes('Daily') ? 'daily' : $node.name.includes('Weekly') ? 'weekly' : 'monthly';\nreturn [{ json: { agentType: 'finance', action: 'financial-report', payload: { period } } }];"
+      },
+      "id": "create-daily-task",
+      "name": "Create Daily Report Task",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const period = $node.name.includes('Daily') ? 'daily' : $node.name.includes('Weekly') ? 'weekly' : 'monthly';\nreturn [{ json: { agentType: 'finance', action: 'financial-report', payload: { period } } }];"
+      },
+      "id": "create-weekly-task",
+      "name": "Create Weekly Report Task",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 400]
+    },
+    {
+      "parameters": {
+        "functionCode": "const period = $node.name.includes('Daily') ? 'daily' : $node.name.includes('Weekly') ? 'weekly' : 'monthly';\nreturn [{ json: { agentType: 'finance', action: 'financial-report', payload: { period } } }];"
+      },
+      "id": "create-monthly-task",
+      "name": "Create Monthly Report Task",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 600]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "={{ $json.agentType }}",
+          "action": "={{ $json.action }}",
+          "payload": "={{ $json.payload }}"
+        }
+      },
+      "id": "execute-daily",
+      "name": "Execute Daily Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "={{ $json.agentType }}",
+          "action": "={{ $json.action }}",
+          "payload": "={{ $json.payload }}"
+        }
+      },
+      "id": "execute-weekly",
+      "name": "Execute Weekly Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 400]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "={{ $json.agentType }}",
+          "action": "={{ $json.action }}",
+          "payload": "={{ $json.payload }}"
+        }
+      },
+      "id": "execute-monthly",
+      "name": "Execute Monthly Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 600]
+    }
+  ],
+  "connections": {
+    "Daily at 6 AM": {
+      "main": [
+        [
+          {
+            "node": "Create Daily Report Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weekly Monday 6 AM": {
+      "main": [
+        [
+          {
+            "node": "Create Weekly Report Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monthly 1st at 6 AM": {
+      "main": [
+        [
+          {
+            "node": "Create Monthly Report Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Daily Report Task": {
+      "main": [
+        [
+          {
+            "node": "Execute Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Weekly Report Task": {
+      "main": [
+        [
+          {
+            "node": "Execute Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Monthly Report Task": {
+      "main": [
+        [
+          {
+            "node": "Execute Monthly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  ],
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "financial-reporting"
+}

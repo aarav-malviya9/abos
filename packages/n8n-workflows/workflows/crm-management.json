@@ -1,0 +1,103 @@
+{
+  "name": "CRM Management",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 10 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily at 10 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { agentType: 'sales', action: 'update-crm', payload: {} } }];"
+      },
+      "id": "create-task",
+      "name": "Create CRM Update Task",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "={{ $json.agentType }}",
+          "action": "={{ $json.action }}",
+          "payload": "={{ $json.payload }}"
+        }
+      },
+      "id": "execute-crm",
+      "name": "Execute CRM Update",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const result = $input.item.json;\n\n// Check for stale leads (no contact in 14 days)\nconst staleThreshold = Date.now() - 14 * 24 * 60 * 60 * 1000;\n\nreturn [{ json: {\n  ...result,\n  staleCheck: true,\n  threshold: staleThreshold\n} }];"
+      },
+      "id": "check-stale",
+      "name": "Check Stale Leads",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    }
+  ],
+  "connections": {
+    "Daily at 10 AM": {
+      "main": [
+        [
+          {
+            "node": "Create CRM Update Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create CRM Update Task": {
+      "main": [
+        [
+          {
+            "node": "Execute CRM Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute CRM Update": {
+      "main": [
+        [
+          {
+            "node": "Check Stale Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  ],
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "crm-management"
+}

@@ -1,0 +1,136 @@
+{
+  "name": "Customer Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "webhook/customer-intake",
+        "options": {}
+      },
+      "id": "webhook",
+      "name": "Customer Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "customer-intake"
+    },
+    {
+      "parameters": {
+        "functionCode": "const data = $input.item.json.body;\n\nreturn [{ json: {\n  projectId: data.projectId || 'default',\n  name: data.name,\n  email: data.email,\n  company: data.company,\n  message: data.message,\n  source: 'webhook'\n} }];"
+      },
+      "id": "parse-data",
+      "name": "Parse Intake Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/crm/contacts",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "projectId": "={{ $json.projectId }}",
+          "name": "={{ $json.name }}",
+          "email": "={{ $json.email }}",
+          "company": "={{ $json.company }}",
+          "status": "lead",
+          "source": "={{ $json.source }}",
+          "notes": "={{ $json.message }}"
+        }
+      },
+      "id": "create-contact",
+      "name": "Create CRM Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "sales",
+          "action": "create-outreach",
+          "payload": {
+            "projectId": "={{ $json.projectId }}",
+            "contactId": "={{ $json.id }}",
+            "channel": "email"
+          }
+        }
+      },
+      "id": "trigger-outreach",
+      "name": "Trigger Sales Outreach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseData": {
+          "success": true,
+          "message": "Thank you for your inquiry! We'll get back to you soon."
+        }
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "Customer Intake Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Intake Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intake Data": {
+      "main": [
+        [
+          {
+            "node": "Create CRM Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create CRM Contact": {
+      "main": [
+        [
+          {
+            "node": "Trigger Sales Outreach",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "customer-intake"
+}

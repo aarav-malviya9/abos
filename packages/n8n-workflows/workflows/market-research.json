@@ -1,0 +1,161 @@
+{
+  "name": "Market Research",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 */6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { agentType: 'market-research', action: 'discover-opportunities', payload: {} } }];"
+      },
+      "id": "create-task",
+      "name": "Create Research Task",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/agents/execute",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "agentType": "={{ $json.agentType }}",
+          "action": "={{ $json.action }}",
+          "payload": "={{ $json.payload }}"
+        }
+      },
+      "id": "execute-research",
+      "name": "Execute Market Research",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const result = $input.item.json;\n\nif (result.success && result.output?.opportunities) {\n  const newOpps = result.output.opportunities.filter((o: any) => o.score >= 70);\n  \n  if (newOpps.length > 0) {\n    return [{ json: {\n      type: 'opportunity_found',\n      count: newOpps.length,\n      opportunities: newOpps.map((o: any) => o.name),\n      message: `Found ${newOpps.length} high-score opportunities`\n    }}];\n  }\n}\n\nreturn [{ json: { type: 'no_new_opportunities', message: 'No new high-score opportunities found' } }];"
+      },
+      "id": "process-results",
+      "name": "Process Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.type === 'opportunity_found' }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-opportunities",
+      "name": "New Opportunities?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/alerts",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "type": "new_opportunity",
+          "message": "={{ 'New opportunities: ' + $json.opportunities.join(', ') }}",
+          "severity": "medium"
+        }
+      },
+      "id": "alert-opportunities",
+      "name": "Alert New Opportunities",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1500, 300]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Create Research Task",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Research Task": {
+      "main": [
+        [
+          {
+            "node": "Execute Market Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Market Research": {
+      "main": [
+        [
+          {
+            "node": "Process Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Results": {
+      "main": [
+        [
+          {
+            "node": "New Opportunities?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Opportunities?": {
+      "main": [
+        [
+          {
+            "node": "Alert New Opportunities",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "market-research"
+}

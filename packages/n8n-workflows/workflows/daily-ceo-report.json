@@ -1,0 +1,173 @@
+{
+  "name": "Daily CEO Report",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "value": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule (9 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const agents = [\n  'ceo',\n  'market-research',\n  'product',\n  'development',\n  'marketing',\n  'sales',\n  'operations',\n  'finance'\n];\n\nreturn agents.map(type => ({ json: { agentType: type, action: 'daily-review' } }));"
+      },
+      "id": "generate-tasks",
+      "name": "Generate Agent Tasks",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "functionCode": "const items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const { agentType, action } = item.json;\n  \n  // Call ABOS API to execute agent task\n  try {\n    const response = await $http.post('http://host.docker.internal:3001/api/agents/execute', {\n      agentType,\n      action,\n      payload: {}\n    });\n    \n    results.push({\n      json: {\n        agentType,\n        success: true,\n        result: response.data\n      }\n    });\n  } catch (error) {\n    results.push({\n      json: {\n        agentType,\n        success: false,\n        error: error.message\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "execute-agents",
+      "name": "Execute All Agents",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const items = $input.all();\nconst agentResults = items.map(item => item.json);\n\nconst successful = agentResults.filter(r => r.success).length;\nconst failed = agentResults.filter(r => !r.success).length;\n\n// Generate CEO report\nconst report = {\n  date: new Date().toISOString().split('T')[0],\n  summary: `Daily report: ${successful} agents completed, ${failed} failed`,\n  agentStatuses: agentResults.map(r => ({\n    agent: r.agentType,\n    status: r.success ? 'completed' : 'failed',\n    error: r.error\n  })),\n  completedTasks: successful,\n  pendingTasks: failed,\n  alerts: agentResults.filter(r => !r.success).map(r => `${r.agentType}: ${r.error}`),\n  recommendations: []\n};\n\nif (failed > 0) {\n  report.recommendations.push('Investigate failed agent executions');\n}\nif (successful === agentResults.length) {\n  report.recommendations.push('All agents healthy - continue operations');\n}\n\nreturn [{ json: report }];"
+      },
+      "id": "compile-report",
+      "name": "Compile Report",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/reports",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {}
+      },
+      "id": "save-report",
+      "name": "Save Report to API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.failed > 0 }}",
+              "operation": "true"
+            }
+          ]
+        }
+      },
+      "id": "check-failures",
+      "name": "Check for Failures",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1000, 500]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3001/api/alerts",
+        "method": "POST",
+        "options": {},
+        "jsonParameters": true,
+        "parameters": {
+          "type": "agent_failure",
+          "message": "={{ $json.agentStatuses.filter(a => a.status === 'failed').map(a => a.agent + ': ' + a.error).join('; ') }}",
+          "severity": "high"
+        }
+      },
+      "id": "send-alert",
+      "name": "Send Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1250, 500]
+    }
+  ],
+  "connections": {
+    "Daily Schedule (9 AM)": {
+      "main": [
+        [
+          {
+            "node": "Generate Agent Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Agent Tasks": {
+      "main": [
+        [
+          {
+            "node": "Execute All Agents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute All Agents": {
+      "main": [
+        [
+          {
+            "node": "Compile Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Report": {
+      "main": [
+        [
+          {
+            "node": "Save Report to API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check for Failures",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Failures": {
+      "main": [
+        [
+          {
+            "node": "Send Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "daily-ceo-report"
+}
