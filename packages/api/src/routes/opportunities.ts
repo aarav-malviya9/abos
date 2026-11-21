@@ -8,7 +8,8 @@ const createOpportunitySchema = z.object({
   name: z.string().min(1).max(200),
   model: z.string().min(1).max(100),
   description: z.string().optional(),
-  score: z.number().min(0).max(100).default(0),
+  score: z.number().min(0).max(100).default(50),
+  status: z.enum(['researching', 'validating', 'selected', 'rejected', 'archived']).default('researching'),
   researchData: z.record(z.unknown()).default({}),
 });
 

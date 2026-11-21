@@ -252,6 +252,81 @@ export async function initializeDatabase(): Promise<void> {
   }
 }
 
+// CamelCase to snake_case column mapping for SQL tables
+const COLUMN_MAP: Record<EntityType, Record<string, string>> = {
+  businessOpportunity: {
+    researchData: 'research_data',
+    validationData: 'validation_data',
+    selectedAt: 'selected_at',
+    rejectedAt: 'rejected_at',
+    rejectionReason: 'rejection_reason',
+  },
+  businessProject: {
+    opportunityId: 'opportunity_id',
+    brandData: 'brand_data',
+    websiteUrl: 'website_url',
+    repositoryUrl: 'repository_url',
+    launchedAt: 'launched_at',
+  },
+  agent: {
+    lastRunAt: 'last_run_at',
+    nextRunAt: 'next_run_at',
+    lastError: 'last_error',
+    runCount: 'run_count',
+  },
+  task: {
+    projectId: 'project_id',
+    agentId: 'agent_id',
+    startedAt: 'started_at',
+    completedAt: 'completed_at',
+    maxRetries: 'max_retries',
+  },
+  crmContact: {
+    projectId: 'project_id',
+    lastContactAt: 'last_contact_at',
+    nextFollowUpAt: 'next_follow_up_at',
+  },
+  crmDeal: {
+    projectId: 'project_id',
+    contactId: 'contact_id',
+    expectedCloseDate: 'expected_close_date',
+    actualCloseDate: 'actual_close_date',
+  },
+  financialTransaction: {
+    projectId: 'project_id',
+  },
+  marketingContent: {
+    projectId: 'project_id',
+    scheduledAt: 'scheduled_at',
+    publishedAt: 'published_at',
+  },
+  automationRun: {
+    workflowName: 'workflow_name',
+    triggeredBy: 'triggered_by',
+    triggerData: 'trigger_data',
+    startedAt: 'started_at',
+    completedAt: 'completed_at',
+    durationMs: 'duration_ms',
+  },
+  auditLog: {
+    entityType: 'entity_type',
+    entityId: 'entity_id',
+    userId: 'user_id',
+    agentId: 'agent_id',
+    ipAddress: 'ip_address',
+    userAgent: 'user_agent',
+  },
+  agentReport: {
+    agentId: 'agent_id',
+  },
+};
+
+function toSnakeCase(key: string): string {
+  if (key === 'createdAt') return key;
+  if (key === 'updatedAt') return 'updated_at';
+  return key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
+
 // Generic repository functions
 const now = () => new Date().toISOString();
 
@@ -278,9 +353,16 @@ export async function createEntity<T extends Record<string, unknown>>(type: Enti
     throw new Error(`Validation failed for ${type}: ${result.error.message}`);
   }
 
-  // Build insert statement
-  const columns = Object.keys(entity).filter(k => k !== 'updatedAt').join(', ');
-  const placeholders = Object.keys(entity).filter(k => k !== 'updatedAt').map(() => '?').join(', ');
+  // Build insert statement with camelCase → snake_case column mapping
+  const colMap = COLUMN_MAP[type] || {};
+  const columns = Object.keys(entity)
+    .filter(k => k !== 'updatedAt')
+    .map(k => colMap[k] || toSnakeCase(k))
+    .join(', ');
+  const placeholders = Object.keys(entity)
+    .filter(k => k !== 'updatedAt')
+    .map(() => '?')
+    .join(', ');
   const values = Object.entries(entity)
     .filter(([k]) => k !== 'updatedAt')
     .map(([, v]) => (typeof v === 'object' ? JSON.stringify(v) : v));
@@ -319,14 +401,17 @@ export async function updateEntity<T extends Record<string, unknown>>(type: Enti
     throw new Error(`Validation failed for ${type}: ${result.error.message}`);
   }
 
-  const columns = Object.keys(data).filter(k => k !== 'id' && k !== 'createdAt').join(', ');
-  const placeholders = Object.keys(data).filter(k => k !== 'id' && k !== 'createdAt').map(() => '?').join(', ');
+  const colMap = COLUMN_MAP[type] || {};
+  const columnNames = Object.keys(data)
+    .filter(k => k !== 'id' && k !== 'createdAt')
+    .map(k => colMap[k] || toSnakeCase(k));
+  const columns = columnNames.map(k => `${k} = ?`).join(', ');
   const values = Object.entries(data)
     .filter(([k]) => k !== 'id' && k !== 'createdAt')
     .map(([, v]) => (typeof v === 'object' ? JSON.stringify(v) : v));
   values.push(id);
 
-  await db.run(`UPDATE ${getTableName(type)} SET ${columns} = ${placeholders}, updated_at = ? WHERE id = ?`, ...values);
+  await db.run(`UPDATE ${getTableName(type)} SET ${columns}, updated_at = ? WHERE id = ?`, ...values);
 
   return updated;
 }
@@ -348,7 +433,8 @@ export async function listEntities<T extends Record<string, unknown>>(type: Enti
   const params: unknown[] = [];
 
   if (options?.where) {
-    const conditions = Object.keys(options.where).map(k => `${k} = ?`).join(' AND ');
+    const colMap = COLUMN_MAP[type] || {};
+    const conditions = Object.keys(options.where).map(k => `${colMap[k] || toSnakeCase(k)} = ?`).join(' AND ');
     query += ` WHERE ${conditions}`;
     params.push(...Object.values(options.where));
   }
@@ -406,19 +492,29 @@ function getTableName(type: EntityType): string {
 }
 
 function deserializeRow(type: EntityType, row: Record<string, unknown>): Record<string, unknown> {
-  const entity = { ...row };
+  const colMap = COLUMN_MAP[type] || {};
+  const snakeToCamel: Record<string, string> = Object.fromEntries(
+    Object.entries(colMap).map(([camel, snake]) => [snake, camel])
+  );
+  snakeToCamel['updated_at'] = 'updatedAt';
+
+  const entity: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    const camelKey = snakeToCamel[key] || key;
+    entity[camelKey] = value;
+  }
 
   // Parse JSON fields
   const jsonFields: Record<EntityType, string[]> = {
-    businessOpportunity: ['research_data', 'validation_data'],
-    businessProject: ['brand_data'],
+    businessOpportunity: ['researchData', 'validationData'],
+    businessProject: ['brandData'],
     agent: ['config'],
     task: ['payload', 'result'],
     crmContact: ['tags'],
     crmDeal: [],
     financialTransaction: ['tags'],
     marketingContent: ['metrics'],
-    automationRun: ['trigger_data', 'logs'],
+    automationRun: ['triggerData', 'logs'],
     auditLog: ['metadata'],
     agentReport: ['metrics', 'recommendations'],
   };
